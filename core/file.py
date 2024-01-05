@@ -2,14 +2,11 @@
 import os
 import re
 import sys
-import ctypes
 import logging
 import itertools
-from sys import platform
 from typing import List
 
 __all__ = ['scan_movies', 'get_fmt_size', 'get_remaining_path_len', 'replace_illegal_chars', 'get_failed_when_scan', 'find_subtitle_in_dir']
-
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from core.avid import *
@@ -19,7 +16,6 @@ from core.datatype import Movie
 
 logger = logging.getLogger(__name__)
 failed_items = []
-
 
 def scan_movies(root: str) -> List[Movie]:
     """获取文件夹内的所有影片的列表（自动探测同一文件夹内的分片）"""
@@ -146,57 +142,22 @@ def scan_movies(root: str) -> List[Movie]:
         movies.append(mov)
     return movies
 
-
 def get_failed_when_scan():
     """获取扫描影片过程中无法自动识别番号的条目"""
     return failed_items
 
-
 def replace_illegal_chars(name):
     """将不能用于文件名的字符替换为形近的字符"""
-    # 非法字符列表 https://stackoverflow.com/a/31976060/6415337
-    if platform == 'win32': 
-        # http://www.unicode.org/Public/security/latest/confusables.txt
-        charmap = {'<': '❮',
-                   '>': '❯',
-                   ':': '：',
-                   '"': '″',
-                   '/': '／',
-                   '\\': '＼',
-                   '|': '｜',
-                   '?': '？',
-                   '*': '꘎'}
-        for c, rep in charmap.items():
-            name = name.replace(c, rep)
-    elif platform == "darwin":  # MAC OS X
-        name = name.replace(':', '：')
-    else:   # 其余都当做Linux处理
-        name = name.replace('/', '／')
+    name = name.replace('/', '／').replace(':', '：')
     return name
-
-
-def is_remote_drive(path: str):
-    """判断一个路径是否为远程映射到本地"""
-    #TODO: 当前仅支持Windows平台
-    DRIVE_REMOTE = 0x4
-    drive = os.path.splitdrive(os.path.abspath(path))[0] + os.sep
-    result = ctypes.windll.kernel32.GetDriveTypeW(drive)
-    return result == DRIVE_REMOTE
-
 
 def get_remaining_path_len(path):
     """计算当前系统支持的最大路径长度与给定路径长度的差值"""
-    #TODO: 支持不同的操作系统
     fullpath = os.path.abspath(path)
-    # Windows: If the length exceeds ~256 characters, you will be able to see the path/files via Windows/File Explorer, but may not be able to delete/move/rename these paths/files
-    if cfg.NamingRule.calc_path_len_by_byte == 'auto':
-        is_remote = is_remote_drive(path)
-        logger.debug(f"目标路径{['不是', '是'][is_remote]}远程文件系统")
-        cfg.NamingRule.calc_path_len_by_byte = is_remote
-    length = len(fullpath.encode('utf-8')) if cfg.NamingRule.calc_path_len_by_byte else len(fullpath)
+    # Linux系统的最大路径长度是一定的，不需要根据不同操作系统进行处理
+    length = len(fullpath)
     remaining = cfg.NamingRule.max_path_len - length
     return remaining
-
 
 def get_fmt_size(file_or_size) -> str:
     """获取格式化后的文件大小
@@ -212,11 +173,8 @@ def get_fmt_size(file_or_size) -> str:
     else:
         size = os.path.getsize(file_or_size)
     for unit in ['','Ki','Mi','Gi','Ti']:
-        # 1023.995: to avoid rounding bug when format str, e.g. 1048571 -> 1024.0 KiB
-        if abs(size) < 1023.995:
+        if abs(size) < 1024.0:
             return f"{size:3.2f} {unit}B"
-        size /= 1024.0
-
 
 _sub_files = {}
 SUB_EXTENSIONS = ('.srt', '.ass')
@@ -236,7 +194,6 @@ def find_subtitle_in_dir(folder: str, dvdid: str):
         _sub_files[folder] = folder_data
     sub_file = folder_data.get(dvdid.upper())
     return sub_file
-
 
 if __name__ == "__main__":
     p = "C:/Windows\\System32//PerceptionSimulation\\..\\Assets\\/ClosedHand.png"
